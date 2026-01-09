@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+.eggs/
+
+# C build artifacts
+*.o
+*.out
+demo_code/Raspberry-Pi_2.13_V2/c/main
+
+# STM32/Keil build artifacts
+*.axf
+*.hex
+*.crf
+*.lnp
+*.htm
+*.dep
+*.lst
+*.map
+*.d
+OBJ/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+DebugConfig/
+*.uvgui.*
+*.uvopt
+*.bak
+
+# macOS
+.DS_Store
+
+# lgpio socket files
+.lgd-*
