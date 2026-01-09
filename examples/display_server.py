@@ -42,6 +42,23 @@ logger = logging.getLogger(__name__)
 # Create Flask app
 app = Flask(__name__)
 
+
+@app.after_request
+def add_cors_headers(response):
+    """Add CORS headers to all responses."""
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Accept'
+    return response
+
+
+@app.route('/api/display', methods=['OPTIONS'])
+@app.route('/status', methods=['OPTIONS'])
+@app.route('/clear', methods=['OPTIONS'])
+def handle_options():
+    """Handle CORS preflight requests."""
+    return '', 204
+
 # Shared state (global)
 canvas = None
 canvas_lock = threading.Lock()
