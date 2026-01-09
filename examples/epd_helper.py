@@ -108,17 +108,21 @@ def load_font(size=16):
     Returns:
         PIL.ImageFont: Font object
     """
-    try:
-        return ImageFont.truetype("MiSans-Light.ttf", size)
-    except:
+    import os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Try fonts in order of preference
+    font_paths = [
+        os.path.join(script_dir, "MiSans-Light.ttf"),
+        "MiSans-Light.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    ]
+
+    for font_path in font_paths:
         try:
-            # Try some common system fonts
-            for font_name in ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                              "/usr/share/fonts/TTF/DejaVuSans.ttf"]:
-                try:
-                    return ImageFont.truetype(font_name, size)
-                except:
-                    pass
-        except:
-            pass
-        return ImageFont.load_default()
+            return ImageFont.truetype(font_path, size)
+        except (IOError, OSError):
+            continue
+
+    return ImageFont.load_default()
