@@ -21,9 +21,12 @@ class LandscapeEPDCanvas(EPDCanvas):
         # This changes logical dimensions from 122x250 to 250x122
         self.gui.rotate = ROTATE_90
 
-        # Update dimensions to reflect landscape mode
+        # Update dimensions in both this class AND the gui class
+        # (gui.w/gui.h are used for boundary checks in set_pixel)
         self.width = 250
         self.height = 122
+        self.gui.w = 250
+        self.gui.h = 122
 
     def render_text(self, text, font_size=24, align_h='center', align_v='middle',
                     margin=10, line_spacing=1.2, max_lines=8):
