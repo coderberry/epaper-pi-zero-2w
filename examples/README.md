@@ -87,7 +87,18 @@ canvas.sleep()  # Required!
 
 ## HTTP Server (display_server.py)
 
-The HTTP server allows you to update the display remotely via HTTP POST requests. The display runs in **landscape mode** (250 wide x 122 tall) with text automatically centered and wrapped.
+The Flask-based HTTP server provides both a **web UI** and **JSON API** for updating the display. The display runs in **landscape mode** (250 wide x 122 tall) with configurable text alignment and formatting.
+
+### Installation
+
+Install Flask dependency:
+```bash
+cd examples
+pip3 install -r requirements.txt
+
+# Or install Flask directly:
+pip3 install Flask
+```
 
 ### Starting the Server
 
@@ -115,14 +126,35 @@ sudo systemctl stop display-server
 sudo ./uninstall.sh
 ```
 
+### Web UI
+
+The server provides a browser-based interface for easy display control.
+
+**Access the Web UI:**
+```
+http://raspberrypi:8080/
+# Or: http://localhost:8080/
+```
+
+**Features:**
+- Text input with live preview
+- Font size slider (8-48)
+- Horizontal alignment: left, center, right
+- Vertical alignment: top, middle, bottom
+- Clear display before rendering option
+- Fast refresh mode toggle
+- Real-time status feedback
+
+Simply open the URL in any web browser, configure your settings, and click "Update Display"!
+
 ### API Endpoints
 
-#### POST /display
-Update the display with centered, wrapped text.
+#### POST /api/display
+Update the display with text (JSON API - backward compatible).
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/display \
+curl -X POST http://localhost:8080/api/display \
   -H "Content-Type: application/json" \
   -d '{"text": "Hello from HTTP!"}'
 ```
@@ -132,6 +164,8 @@ curl -X POST http://localhost:8080/display \
 {
   "text": "Your message here",
   "font_size": 24,
+  "align_h": "center",
+  "align_v": "middle",
   "clear_first": true,
   "fast_refresh": false
 }
@@ -140,6 +174,8 @@ curl -X POST http://localhost:8080/display \
 **Parameters:**
 - `text` (string, required): Text to display
 - `font_size` (int, optional, default 24): Font size (8-48)
+- `align_h` (string, optional, default "center"): Horizontal alignment - "left", "center", "right"
+- `align_v` (string, optional, default "middle"): Vertical alignment - "top", "middle", "bottom"
 - `clear_first` (bool, optional, default true): Clear before rendering
 - `fast_refresh` (bool, optional, default false): Use fast refresh (~1.5s vs ~2s)
 
@@ -177,47 +213,89 @@ Clear the display.
 curl http://localhost:8080/clear
 ```
 
-### Examples
+### API Examples
 
-**Simple text:**
+**Simple centered text:**
 ```bash
-curl -X POST http://localhost:8080/display \
+curl -X POST http://localhost:8080/api/display \
   -H "Content-Type: application/json" \
   -d '{"text": "Hello World!"}'
 ```
 
+**Left-aligned text at top:**
+```bash
+curl -X POST http://localhost:8080/api/display \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Left aligned at top", "align_h": "left", "align_v": "top"}'
+```
+
+**Right-aligned text at bottom:**
+```bash
+curl -X POST http://localhost:8080/api/display \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Bottom right corner", "align_h": "right", "align_v": "bottom"}'
+```
+
 **Long text (auto-wraps):**
 ```bash
-curl -X POST http://localhost:8080/display \
+curl -X POST http://localhost:8080/api/display \
   -H "Content-Type: application/json" \
-  -d '{"text": "This is a longer message that will automatically wrap across multiple lines and be centered on the display."}'
+  -d '{"text": "This is a longer message that will automatically wrap across multiple lines with your chosen alignment."}'
 ```
 
 **Custom font size:**
 ```bash
-curl -X POST http://localhost:8080/display \
+curl -X POST http://localhost:8080/api/display \
   -H "Content-Type: application/json" \
   -d '{"text": "Large Text", "font_size": 32}'
 ```
 
 **Fast refresh:**
 ```bash
-curl -X POST http://localhost:8080/display \
+curl -X POST http://localhost:8080/api/display \
   -H "Content-Type: application/json" \
   -d '{"text": "Quick update", "fast_refresh": true}'
 ```
 
-### Landscape Mode
+### Display Modes & Alignment
 
-The HTTP server uses **landscape orientation** (250x122 pixels):
-- Text is automatically centered both horizontally and vertically
-- Word wrapping happens automatically
+The HTTP server uses **landscape orientation** (250x122 pixels) with flexible alignment:
+
+**Horizontal Alignment:**
+- `left`: Text aligns to the left margin
+- `center`: Text is centered horizontally (default)
+- `right`: Text aligns to the right margin
+
+**Vertical Alignment:**
+- `top`: Text starts at the top margin
+- `middle`: Text is centered vertically (default)
+- `bottom`: Text aligns to the bottom
+
+**Text Wrapping:**
+- Word wrapping happens automatically based on font size
 - Long text is truncated with "..." after 8 lines
+- Each line's horizontal alignment is applied independently
 
 ### Files
 
-- `display_server.py` - HTTP server implementation
-- `landscape_helper.py` - Landscape mode canvas with text centering
+- `display_server.py` - Flask-based HTTP server with web UI and JSON API
+- `landscape_helper.py` - Landscape mode canvas with flexible text alignment
+- `templates/index.html` - Web UI HTML form
+- `requirements.txt` - Python dependencies (Flask)
 - `systemd/display-server.service` - Systemd service file
 - `systemd/install.sh` - Install as service
 - `systemd/uninstall.sh` - Uninstall service
+
+### Migration from Previous Version
+
+If you were using the previous JSON-only server, note these changes:
+
+**API Endpoint Change:**
+- Old: `POST /display`
+- New: `POST /api/display`
+
+**New Parameters (optional, backward compatible):**
+- `align_h`: Horizontal alignment ("left", "center", "right")
+- `align_v`: Vertical alignment ("top", "middle", "bottom")
+
+Existing code will continue to work with defaults (center/middle alignment). Simply update your endpoint URL from `/display` to `/api/display`.

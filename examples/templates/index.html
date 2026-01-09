@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>e-Paper Display Control</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px;
+            font-size: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+
+        .slider-value {
+            min-width: 45px;
+            text-align: center;
+            font-weight: bold;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .radio-group label {
+            display: flex;
+            align-items: center;
+            font-weight: normal;
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+
+        .radio-group input[type="radio"] {
+            margin-right: 6px;
+            cursor: pointer;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            font-weight: normal;
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+        }
+
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .status {
+            margin-top: 24px;
+            padding: 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+
+        .display-preview {
+            margin-top: 12px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+            font-size: 12px;
+            color: #555;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            color: #666;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 8px;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .display-specs {
+            display: inline-block;
+            background: #f5f5f5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-right: 8px;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .radio-group {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📟 e-Paper Display Control</h1>
+        <p class="subtitle">Configure and update your 250×122 landscape display</p>
+
+        <form method="POST" action="/display" id="displayForm">
+            <!-- Text Content -->
+            <div class="form-group">
+                <label for="text">Display Text:</label>
+                <textarea name="text" id="text" placeholder="Enter text to display..." required>{{ text or '' }}</textarea>
+            </div>
+
+            <!-- Font Size Slider -->
+            <div class="form-group">
+                <label for="font_size">Font Size:</label>
+                <div class="slider-container">
+                    <input type="range" name="font_size" id="font_size"
+                           min="8" max="48" value="{{ font_size or 24 }}"
+                           oninput="document.getElementById('font_size_value').textContent = this.value + 'px'">
+                    <span class="slider-value" id="font_size_value">{{ font_size or 24 }}px</span>
+                </div>
+            </div>
+
+            <!-- Horizontal Alignment -->
+            <div class="form-group">
+                <label>Horizontal Alignment:</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="align_h" value="left" {% if align_h == 'left' %}checked{% endif %}>
+                        Left
+                    </label>
+                    <label>
+                        <input type="radio" name="align_h" value="center" {% if not align_h or align_h == 'center' %}checked{% endif %}>
+                        Center
+                    </label>
+                    <label>
+                        <input type="radio" name="align_h" value="right" {% if align_h == 'right' %}checked{% endif %}>
+                        Right
+                    </label>
+                </div>
+            </div>
+
+            <!-- Vertical Alignment -->
+            <div class="form-group">
+                <label>Vertical Alignment:</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="align_v" value="top" {% if align_v == 'top' %}checked{% endif %}>
+                        Top
+                    </label>
+                    <label>
+                        <input type="radio" name="align_v" value="middle" {% if not align_v or align_v == 'middle' %}checked{% endif %}>
+                        Middle
+                    </label>
+                    <label>
+                        <input type="radio" name="align_v" value="bottom" {% if align_v == 'bottom' %}checked{% endif %}>
+                        Bottom
+                    </label>
+                </div>
+            </div>
+
+            <!-- Options -->
+            <div class="form-group">
+                <label>Options:</label>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" name="clear_first" value="true" {% if clear_first is not defined or clear_first %}checked{% endif %}>
+                        Clear display before rendering
+                    </label>
+                    <label>
+                        <input type="checkbox" name="fast_refresh" value="true" {% if fast_refresh %}checked{% endif %}>
+                        Fast refresh (may cause ghosting)
+                    </label>
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit">🚀 Update Display</button>
+        </form>
+
+        <!-- Status Message -->
+        {% if status %}
+        <div class="status {{ status_type }}">
+            <strong>{{ '✓' if status_type == 'success' else '✗' }}</strong> {{ status }}
+            {% if metadata %}
+            <div class="display-preview">
+                📊 Lines rendered: <strong>{{ metadata.lines }}</strong> |
+                Truncated: <strong>{{ 'Yes' if metadata.truncated else 'No' }}</strong> |
+                Fast refresh: <strong>{{ 'Yes' if metadata.fast_refresh else 'No' }}</strong>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <div style="margin-bottom: 8px;">
+                <span class="display-specs">📐 250×122 pixels</span>
+                <span class="display-specs">🎨 Landscape mode</span>
+            </div>
+            <a href="/status" target="_blank">Server Status</a> |
+            <a href="/clear" onclick="return confirm('Clear the display?')">Clear Display</a>
+        </div>
+    </div>
+</body>
+</html>

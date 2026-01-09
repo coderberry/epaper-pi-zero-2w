@@ -25,14 +25,17 @@ class LandscapeEPDCanvas(EPDCanvas):
         self.width = 250
         self.height = 122
 
-    def render_centered_text(self, text, font_size=24, margin=10, line_spacing=1.2, max_lines=8):
+    def render_text(self, text, font_size=24, align_h='center', align_v='middle',
+                    margin=10, line_spacing=1.2, max_lines=8):
         """
-        Render text centered both horizontally and vertically with word wrapping.
+        Render text with flexible horizontal and vertical alignment.
 
         Args:
             text: Text to display (empty text will be ignored)
             font_size: Font size in points (default: 24)
-            margin: Margin in pixels on left/right (default: 10)
+            align_h: Horizontal alignment - 'left', 'center', 'right' (default: 'center')
+            align_v: Vertical alignment - 'top', 'middle', 'bottom' (default: 'middle')
+            margin: Margin in pixels (default: 10)
             line_spacing: Line spacing multiplier (default: 1.2)
             max_lines: Maximum number of lines before truncating (default: 8)
 
@@ -42,6 +45,12 @@ class LandscapeEPDCanvas(EPDCanvas):
                 - truncated: Whether text was truncated
                 - text_height: Total height of text block
         """
+        # Validate alignment parameters
+        if align_h not in ('left', 'center', 'right'):
+            align_h = 'center'
+        if align_v not in ('top', 'middle', 'bottom'):
+            align_v = 'middle'
+
         # Handle empty text
         if not text or not text.strip():
             return {"lines": 0, "truncated": False, "text_height": 0}
@@ -94,10 +103,15 @@ class LandscapeEPDCanvas(EPDCanvas):
         # Calculate total text block height
         total_text_height = len(wrapped_lines) * line_height
 
-        # Calculate vertical offset to center the text block
-        v_offset = (self.height - total_text_height) // 2
+        # Calculate vertical offset based on alignment
+        if align_v == 'top':
+            v_offset = margin
+        elif align_v == 'bottom':
+            v_offset = self.height - total_text_height - margin
+        else:  # middle
+            v_offset = (self.height - total_text_height) // 2
 
-        # Render each line centered horizontally
+        # Render each line with horizontal alignment
         for i, line in enumerate(wrapped_lines):
             # Measure line width
             try:
@@ -106,8 +120,13 @@ class LandscapeEPDCanvas(EPDCanvas):
             except AttributeError:
                 line_width, _ = font.getsize(line)
 
-            # Calculate horizontal offset to center this line
-            h_offset = (self.width - line_width) // 2
+            # Calculate horizontal offset based on alignment
+            if align_h == 'left':
+                h_offset = margin
+            elif align_h == 'right':
+                h_offset = self.width - line_width - margin
+            else:  # center
+                h_offset = (self.width - line_width) // 2
 
             # Calculate y position for this line
             y_pos = v_offset + (i * line_height)
@@ -120,6 +139,28 @@ class LandscapeEPDCanvas(EPDCanvas):
             "truncated": truncated,
             "text_height": total_text_height
         }
+
+    def render_centered_text(self, text, font_size=24, margin=10, line_spacing=1.2, max_lines=8):
+        """
+        Render text centered both horizontally and vertically with word wrapping.
+
+        This is a convenience wrapper around render_text() for backward compatibility.
+
+        Args:
+            text: Text to display (empty text will be ignored)
+            font_size: Font size in points (default: 24)
+            margin: Margin in pixels on left/right (default: 10)
+            line_spacing: Line spacing multiplier (default: 1.2)
+            max_lines: Maximum number of lines before truncating (default: 8)
+
+        Returns:
+            dict: Metadata about the rendering:
+                - lines: Number of lines rendered
+                - truncated: Whether text was truncated
+                - text_height: Total height of text block
+        """
+        return self.render_text(text, font_size, 'center', 'middle',
+                               margin, line_spacing, max_lines)
 
     def _wrap_text(self, text, font, max_width):
         """

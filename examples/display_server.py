@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """
-HTTP server for e-paper display.
-Accepts JSON POST requests to update display with centered, wrapped text in landscape mode.
+Flask-based HTTP server for e-paper display.
+Provides both a web UI and JSON API for updating display with text.
 
 Usage:
     python3 display_server.py [--port 8080] [--bind 0.0.0.0]
 
+Web UI:
+    GET / - HTML form for display configuration
+
 API Endpoints:
-    POST /display - Update display with text
-        Body: {"text": "Hello", "font_size": 24, "clear_first": true, "fast_refresh": false}
+    POST /api/display - Update display with text
+        Body: {"text": "Hello", "font_size": 24, "align_h": "center", "align_v": "middle",
+               "clear_first": true, "fast_refresh": false}
 
     GET /status - Server health check
         Returns: {"status": "ok", "uptime": seconds, "last_update": timestamp}
@@ -17,8 +21,7 @@ API Endpoints:
         Returns: {"status": "success", "message": "Display cleared"}
 """
 
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import json
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 import threading
 import signal
 import sys
@@ -36,206 +39,276 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Create Flask app
+app = Flask(__name__)
 
-class DisplayHTTPHandler(BaseHTTPRequestHandler):
-    """HTTP request handler for e-paper display updates."""
+# Shared state (global)
+canvas = None
+canvas_lock = threading.Lock()
+start_time = None
+last_update = None
 
-    # Shared canvas instance (initialized in main())
-    canvas = None
-    canvas_lock = threading.Lock()
-    start_time = None
-    last_update = None
 
-    def log_message(self, format, *args):
-        """Override to use logging module."""
-        logger.info("%s - %s" % (self.address_string(), format % args))
+def update_display(text, font_size, align_h, align_v, clear_first, fast_refresh):
+    """
+    Shared logic for updating display from both web form and API.
+    Thread-safe with canvas_lock.
 
-    def send_json_response(self, status_code, data):
-        """Send JSON response with proper headers."""
-        self.send_response(status_code)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode('utf-8'))
+    Args:
+        text: Text to display
+        font_size: Font size (8-48)
+        align_h: Horizontal alignment ('left', 'center', 'right')
+        align_v: Vertical alignment ('top', 'middle', 'bottom')
+        clear_first: Clear display before rendering
+        fast_refresh: Use fast refresh mode
 
-    def do_OPTIONS(self):
-        """Handle CORS preflight requests."""
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+    Returns:
+        dict: Metadata about rendering (lines, truncated, etc.)
+    """
+    global canvas, canvas_lock, last_update
 
-    def do_POST(self):
-        """Handle POST requests."""
-        if self.path == '/display':
-            self.handle_display_update()
+    with canvas_lock:
+        # Clear display if requested
+        if clear_first:
+            canvas.clear()
+
+        # Render text with alignment
+        result = canvas.render_text(
+            text=text,
+            font_size=font_size,
+            align_h=align_h,
+            align_v=align_v
+        )
+
+        # Update display
+        if fast_refresh:
+            canvas.display_fast()
         else:
-            self.send_json_response(404, {
-                "status": "error",
-                "message": f"Endpoint not found: {self.path}"
-            })
+            canvas.display()
 
-    def do_GET(self):
-        """Handle GET requests."""
-        if self.path == '/status':
-            self.handle_status()
-        elif self.path == '/clear':
-            self.handle_clear()
+        # Update timestamp
+        last_update = datetime.now().isoformat()
+
+        # Log update
+        logger.info(f"Display updated: {result['lines']} lines, "
+                   f"align={align_h}/{align_v}, "
+                   f"truncated={result['truncated']}, "
+                   f"fast_refresh={fast_refresh}")
+
+        return {
+            "lines": result["lines"],
+            "truncated": result["truncated"],
+            "fast_refresh": fast_refresh
+        }
+
+
+@app.route('/', methods=['GET'])
+def index():
+    """Render web UI form."""
+    return render_template('index.html')
+
+
+@app.route('/display', methods=['POST'])
+def handle_form_submission():
+    """Handle web form submission."""
+    try:
+        # Extract form data
+        text = request.form.get('text', '').strip()
+        font_size = int(request.form.get('font_size', 24))
+        align_h = request.form.get('align_h', 'center')
+        align_v = request.form.get('align_v', 'middle')
+        clear_first = request.form.get('clear_first') == 'true'
+        fast_refresh = request.form.get('fast_refresh') == 'true'
+
+        # Validate text
+        if not text:
+            return render_template('index.html',
+                                 status='Text is required',
+                                 status_type='error',
+                                 text=text,
+                                 font_size=font_size,
+                                 align_h=align_h,
+                                 align_v=align_v,
+                                 clear_first=clear_first,
+                                 fast_refresh=fast_refresh)
+
+        # Validate font size
+        if font_size < 8 or font_size > 48:
+            return render_template('index.html',
+                                 status='Font size must be between 8 and 48',
+                                 status_type='error',
+                                 text=text,
+                                 font_size=font_size,
+                                 align_h=align_h,
+                                 align_v=align_v,
+                                 clear_first=clear_first,
+                                 fast_refresh=fast_refresh)
+
+        # Update display
+        result = update_display(text, font_size, align_h, align_v,
+                               clear_first, fast_refresh)
+
+        # Render success
+        return render_template('index.html',
+                             status='Display updated successfully!',
+                             status_type='success',
+                             text=text,
+                             font_size=font_size,
+                             align_h=align_h,
+                             align_v=align_v,
+                             clear_first=clear_first,
+                             fast_refresh=fast_refresh,
+                             metadata=result)
+
+    except ValueError as e:
+        logger.error(f"Form validation error: {e}", exc_info=True)
+        return render_template('index.html',
+                             status=f'Invalid input: {str(e)}',
+                             status_type='error',
+                             text=request.form.get('text', ''))
+
+    except Exception as e:
+        logger.error(f"Form submission error: {e}", exc_info=True)
+        return render_template('index.html',
+                             status=f'Error: {str(e)}',
+                             status_type='error',
+                             text=request.form.get('text', ''))
+
+
+@app.route('/api/display', methods=['POST'])
+def handle_api_display():
+    """Handle JSON API requests (backward compatible)."""
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                "status": "error",
+                "message": "Empty request body"
+            }), 400
+
+        # Validate required field
+        if 'text' not in data:
+            return jsonify({
+                "status": "error",
+                "message": "Missing required field: 'text'"
+            }), 400
+
+        # Extract parameters (backward compatible defaults)
+        text = data['text']
+        font_size = data.get('font_size', 24)
+        clear_first = data.get('clear_first', True)
+        fast_refresh = data.get('fast_refresh', False)
+
+        # NEW: Support alignment in API (optional, default to center/middle)
+        align_h = data.get('align_h', 'center')
+        align_v = data.get('align_v', 'middle')
+
+        # Validate parameters
+        if not isinstance(text, str):
+            return jsonify({
+                "status": "error",
+                "message": "'text' must be a string"
+            }), 400
+
+        if not isinstance(font_size, int) or font_size < 8 or font_size > 48:
+            return jsonify({
+                "status": "error",
+                "message": "'font_size' must be an integer between 8 and 48"
+            }), 400
+
+        # Validate alignment parameters
+        if align_h not in ('left', 'center', 'right'):
+            return jsonify({
+                "status": "error",
+                "message": "'align_h' must be 'left', 'center', or 'right'"
+            }), 400
+
+        if align_v not in ('top', 'middle', 'bottom'):
+            return jsonify({
+                "status": "error",
+                "message": "'align_v' must be 'top', 'middle', or 'bottom'"
+            }), 400
+
+        # Update display
+        result = update_display(text, font_size, align_h, align_v,
+                               clear_first, fast_refresh)
+
+        # Return JSON response
+        return jsonify({
+            "status": "success",
+            "message": "Display updated",
+            "lines": result["lines"],
+            "truncated": result["truncated"],
+            "fast_refresh": fast_refresh
+        }), 200
+
+    except Exception as e:
+        logger.error(f"API error: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": f"Server error: {str(e)}"
+        }), 500
+
+
+@app.route('/status', methods=['GET'])
+def handle_status():
+    """Return server status."""
+    global start_time, last_update
+
+    uptime = int(time.time() - start_time) if start_time else 0
+
+    return jsonify({
+        "status": "ok",
+        "uptime": uptime,
+        "last_update": last_update
+    })
+
+
+@app.route('/clear', methods=['GET'])
+def handle_clear():
+    """Clear the display."""
+    global canvas, canvas_lock, last_update
+
+    try:
+        with canvas_lock:
+            canvas.clear()
+            canvas.display()
+            last_update = datetime.now().isoformat()
+
+        logger.info("Display cleared")
+
+        # Return JSON for API clients, or redirect for browser
+        if request.headers.get('Accept', '').startswith('application/json'):
+            return jsonify({
+                "status": "success",
+                "message": "Display cleared"
+            })
         else:
-            self.send_json_response(404, {
-                "status": "error",
-                "message": f"Endpoint not found: {self.path}"
-            })
+            return redirect(url_for('index'))
 
-    def handle_display_update(self):
-        """Handle POST /display - Update display with text."""
-        try:
-            # Read request body
-            content_length = int(self.headers.get('Content-Length', 0))
-            if content_length == 0:
-                self.send_json_response(400, {
-                    "status": "error",
-                    "message": "Empty request body"
-                })
-                return
-
-            body = self.rfile.read(content_length).decode('utf-8')
-
-            # Parse JSON
-            try:
-                data = json.loads(body)
-            except json.JSONDecodeError as e:
-                self.send_json_response(400, {
-                    "status": "error",
-                    "message": f"Invalid JSON: {str(e)}"
-                })
-                return
-
-            # Validate required field
-            if 'text' not in data:
-                self.send_json_response(400, {
-                    "status": "error",
-                    "message": "Missing required field: 'text'"
-                })
-                return
-
-            # Extract parameters
-            text = data['text']
-            font_size = data.get('font_size', 24)
-            clear_first = data.get('clear_first', True)
-            fast_refresh = data.get('fast_refresh', False)
-
-            # Validate parameters
-            if not isinstance(text, str):
-                self.send_json_response(400, {
-                    "status": "error",
-                    "message": "'text' must be a string"
-                })
-                return
-
-            if not isinstance(font_size, int) or font_size < 8 or font_size > 48:
-                self.send_json_response(400, {
-                    "status": "error",
-                    "message": "'font_size' must be an integer between 8 and 48"
-                })
-                return
-
-            # Acquire lock for thread safety
-            with self.canvas_lock:
-                try:
-                    # Clear display if requested
-                    if clear_first:
-                        self.canvas.clear()
-
-                    # Render centered text
-                    result = self.canvas.render_centered_text(
-                        text=text,
-                        font_size=font_size
-                    )
-
-                    # Update display
-                    if fast_refresh:
-                        self.canvas.display_fast()
-                    else:
-                        self.canvas.display()
-
-                    # Update last_update timestamp
-                    DisplayHTTPHandler.last_update = datetime.now().isoformat()
-
-                    # Send success response with metadata
-                    self.send_json_response(200, {
-                        "status": "success",
-                        "message": "Display updated",
-                        "lines": result["lines"],
-                        "truncated": result["truncated"],
-                        "fast_refresh": fast_refresh
-                    })
-
-                    logger.info(f"Display updated: {result['lines']} lines, "
-                               f"truncated={result['truncated']}, "
-                               f"fast_refresh={fast_refresh}")
-
-                except Exception as e:
-                    logger.error(f"Display update failed: {str(e)}", exc_info=True)
-                    self.send_json_response(500, {
-                        "status": "error",
-                        "message": f"Display error: {str(e)}"
-                    })
-
-        except Exception as e:
-            logger.error(f"Request handling failed: {str(e)}", exc_info=True)
-            self.send_json_response(500, {
-                "status": "error",
-                "message": f"Server error: {str(e)}"
-            })
-
-    def handle_status(self):
-        """Handle GET /status - Return server status."""
-        uptime = int(time.time() - self.start_time) if self.start_time else 0
-
-        self.send_json_response(200, {
-            "status": "ok",
-            "uptime": uptime,
-            "last_update": self.last_update
-        })
-
-    def handle_clear(self):
-        """Handle GET /clear - Clear the display."""
-        try:
-            with self.canvas_lock:
-                self.canvas.clear()
-                self.canvas.display()
-
-                DisplayHTTPHandler.last_update = datetime.now().isoformat()
-
-                self.send_json_response(200, {
-                    "status": "success",
-                    "message": "Display cleared"
-                })
-
-                logger.info("Display cleared")
-
-        except Exception as e:
-            logger.error(f"Clear failed: {str(e)}", exc_info=True)
-            self.send_json_response(500, {
-                "status": "error",
-                "message": f"Display error: {str(e)}"
-            })
+    except Exception as e:
+        logger.error(f"Clear failed: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": f"Display error: {str(e)}"
+        }), 500
 
 
 def signal_handler(signum, frame):
     """Handle shutdown signals gracefully."""
+    global canvas
+
     logger.info(f"Received signal {signum}, shutting down gracefully...")
 
     # Clean up display
-    if DisplayHTTPHandler.canvas:
+    if canvas:
         try:
             logger.info("Clearing display and putting to sleep...")
-            DisplayHTTPHandler.canvas.clear()
-            DisplayHTTPHandler.canvas.display()
-            DisplayHTTPHandler.canvas.sleep()
-            DisplayHTTPHandler.canvas.cleanup()
+            canvas.clear()
+            canvas.display()
+            canvas.sleep()
+            canvas.cleanup()
             logger.info("Display cleanup complete")
         except Exception as e:
             logger.error(f"Error during cleanup: {str(e)}")
@@ -244,7 +317,9 @@ def signal_handler(signum, frame):
 
 
 def main():
-    """Start the HTTP server."""
+    """Start the Flask server."""
+    global canvas, start_time
+
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='e-Paper Display HTTP Server')
     parser.add_argument('--port', type=int, default=8080,
@@ -263,21 +338,20 @@ def main():
         canvas.clear()
         canvas.display()
 
-        # Set canvas on handler class
-        DisplayHTTPHandler.canvas = canvas
-        DisplayHTTPHandler.start_time = time.time()
+        # Set start time
+        start_time = time.time()
 
         # Register signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-        # Create and start server
-        server = HTTPServer((args.bind, args.port), DisplayHTTPHandler)
-        logger.info(f"Server started on {args.bind}:{args.port}")
+        # Start Flask server
+        logger.info(f"Server starting on {args.bind}:{args.port}")
+        logger.info(f"Web UI: http://{args.bind}:{args.port}/")
         logger.info("Press Ctrl+C to stop")
 
-        # Serve forever
-        server.serve_forever()
+        # Run Flask app
+        app.run(host=args.bind, port=args.port, debug=False, threaded=True)
 
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt received, shutting down...")

@@ -1,0 +1,6 @@
+# Flask web framework for HTTP server with web UI
+Flask==3.0.0
+Werkzeug==3.0.0
+
+# Note: System dependencies (install via apt):
+# sudo apt install python3-pip python3-spidev python3-gpiozero python3-numpy python3-pil
