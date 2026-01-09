@@ -42,7 +42,26 @@ make
 ./main
 ```
 
+## Examples
+
+The `examples/` directory contains simple, well-documented scripts:
+
+| Script | Description |
+|--------|-------------|
+| `01_hello_world.py` | Basic text display |
+| `02_shapes.py` | Drawing lines, rectangles, circles |
+| `03_display_image.py` | Load and display images |
+| `04_clock.py` | Digital clock with live updates |
+| `05_system_info.py` | System monitoring (CPU, memory, disk) |
+| `06_weather_template.py` | Weather display template |
+
+```bash
+cd examples
+python3 01_hello_world.py
+```
+
 ## Resources
 
 - Wiki: https://seengreat.com/wiki/71/2-13inch-e-paper-display
 - Demo code provided by seengreat.com: `./demo_code`
+- Setup guide: `SETUP.md`
