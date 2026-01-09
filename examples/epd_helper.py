@@ -1,69 +1,101 @@
 """
 Helper functions for e-paper display.
-Handles image conversion to the format expected by the EPD driver.
+Uses the EPD_GUI class which has the correct memory layout for the display.
 """
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from epd_2inch13 import EPD_WIDTH, EPD_HEIGHT
+from epd_gui import EPD_GUI, WHITE, BLACK
 
 # Display dimensions
 DISPLAY_WIDTH = EPD_WIDTH    # 122 pixels
 DISPLAY_HEIGHT = EPD_HEIGHT  # 250 pixels
 
-def pil_to_epd(image):
+
+class EPDCanvas:
     """
-    Convert a PIL Image to the byte format expected by epd.display().
-
-    The display expects 4000 bytes organized as:
-    - 16 byte-rows (122 pixels / 8 = 15.25, rounded up to 16)
-    - 250 columns
-    - Each byte represents 8 vertical pixels
-
-    Args:
-        image: PIL Image object (will be resized/converted as needed)
-
-    Returns:
-        list: 4000 bytes ready for epd.display()
+    A canvas for drawing on the e-paper display.
+    Uses EPD_GUI internally for correct memory layout.
+    Provides a simple interface for drawing shapes and text.
     """
-    # Resize to display dimensions if needed
-    if image.size != (DISPLAY_WIDTH, DISPLAY_HEIGHT):
-        image = image.resize((DISPLAY_WIDTH, DISPLAY_HEIGHT), Image.LANCZOS)
 
-    # Convert to 1-bit black and white
-    image = image.convert('1')
+    def __init__(self):
+        self.gui = EPD_GUI()
+        self.width = DISPLAY_WIDTH
+        self.height = DISPLAY_HEIGHT
 
-    # Get pixel data
-    pixels = image.load()
+    def clear(self, color=WHITE):
+        """Clear the canvas to white (0xFF) or black (0x00)."""
+        self.gui.clear(color)
 
-    # Calculate byte dimensions
-    byte_width = (DISPLAY_WIDTH + 7) // 8  # 16 bytes per row
+    def pixel(self, x, y, color=BLACK):
+        """Set a single pixel."""
+        if 0 <= x < self.width and 0 <= y < self.height:
+            self.gui.set_pixel(x, y, color)
 
-    # Create output buffer (4000 bytes)
-    img_bytes = [0xFF] * (byte_width * DISPLAY_HEIGHT)
+    def line(self, x1, y1, x2, y2, color=BLACK):
+        """Draw a line from (x1,y1) to (x2,y2)."""
+        from epd_gui import PIXEL_1X1, LINE_SOLID
+        self.gui.draw_line(x1, y1, x2, y2, color, PIXEL_1X1, LINE_SOLID)
 
-    # Convert pixels to bytes
-    # The display memory is organized column-by-column
-    for y in range(DISPLAY_HEIGHT):
-        for x in range(DISPLAY_WIDTH):
-            if pixels[x, y] == 0:  # Black pixel
-                byte_idx = y + (x // 8) * DISPLAY_HEIGHT
-                bit_idx = 7 - (x % 8)
-                img_bytes[byte_idx] &= ~(1 << bit_idx)
+    def rectangle(self, x1, y1, x2, y2, color=BLACK, fill=False):
+        """Draw a rectangle. If fill=True, fill it solid."""
+        from epd_gui import PIXEL_1X1, FILL_EMPTY, FILL_FULL
+        fill_style = FILL_FULL if fill else FILL_EMPTY
+        self.gui.draw_rectangle(x1, y1, x2, y2, color, fill_style, PIXEL_1X1)
 
-    return img_bytes
+    def circle(self, x, y, radius, color=BLACK, fill=False):
+        """Draw a circle centered at (x,y) with given radius."""
+        from epd_gui import PIXEL_1X1, FILL_EMPTY, FILL_FULL
+        fill_style = FILL_FULL if fill else FILL_EMPTY
+        self.gui.draw_circle(x, y, radius, color, fill_style, PIXEL_1X1)
 
+    def text(self, x, y, text_str, font=None, color=BLACK):
+        """
+        Draw text at position (x,y).
+        font should be a PIL ImageFont object.
+        """
+        if font is None:
+            font = load_font(16)
 
-def create_canvas():
-    """
-    Create a new blank canvas (white) for drawing.
+        # Get font metrics
+        try:
+            # Try newer Pillow API first
+            bbox = font.getbbox(text_str)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+        except AttributeError:
+            # Fall back to older API
+            text_width, text_height = font.getsize(text_str)
 
-    Returns:
-        tuple: (PIL.Image, PIL.ImageDraw.Draw) - image and draw objects
-    """
-    from PIL import ImageDraw
-    image = Image.new('1', (DISPLAY_WIDTH, DISPLAY_HEIGHT), 255)
-    draw = ImageDraw.Draw(image)
-    return image, draw
+        # Render text to a small image
+        text_img = Image.new('1', (text_width + 4, text_height + 4), 1)
+        draw = ImageDraw.Draw(text_img)
+        draw.text((0, 0), text_str, font=font, fill=0)
+
+        # Copy pixels to canvas
+        pixels = text_img.load()
+        for ty in range(text_img.height):
+            for tx in range(text_img.width):
+                if pixels[tx, ty] == 0:  # Black pixel in text
+                    self.pixel(x + tx, y + ty, color)
+
+    def display(self):
+        """Send the canvas to the display."""
+        self.gui.epd.display(self.gui.img)
+
+    def display_fast(self):
+        """Send the canvas using fast refresh (less flicker, may ghost)."""
+        self.gui.epd.hw_init_fast()
+        self.gui.epd.whitescreen_all_fast(self.gui.img)
+
+    def sleep(self):
+        """Put the display to sleep (required after display)."""
+        self.gui.epd.sleep()
+
+    def cleanup(self):
+        """Clean up GPIO resources."""
+        self.gui.epd.clean_gpio()
 
 
 def load_font(size=16):
@@ -76,8 +108,17 @@ def load_font(size=16):
     Returns:
         PIL.ImageFont: Font object
     """
-    from PIL import ImageFont
     try:
         return ImageFont.truetype("MiSans-Light.ttf", size)
     except:
+        try:
+            # Try some common system fonts
+            for font_name in ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                              "/usr/share/fonts/TTF/DejaVuSans.ttf"]:
+                try:
+                    return ImageFont.truetype(font_name, size)
+                except:
+                    pass
+        except:
+            pass
         return ImageFont.load_default()

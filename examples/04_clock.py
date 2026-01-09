@@ -2,26 +2,23 @@
 """
 Example 04: Digital Clock
 Displays a digital clock that updates every second.
-Uses fast refresh for quicker updates.
 
 Press Ctrl+C to exit.
 """
 
-from epd_2inch13 import EPD_2Inch13
-from epd_helper import create_canvas, pil_to_epd, load_font
+from epd_helper import EPDCanvas, load_font
 import time
 from datetime import datetime
 
 def main():
-    epd = EPD_2Inch13()
+    canvas = EPDCanvas()
 
     try:
         # Load fonts
-        font_time = load_font(36)
-        font_date = load_font(14)
-        font_label = load_font(12)
+        font_time = load_font(32)
+        font_date = load_font(12)
+        font_label = load_font(10)
 
-        print("Initializing display...")
         print("Clock running. Press Ctrl+C to stop.")
         print("Full refresh every minute to prevent ghosting.")
 
@@ -30,49 +27,48 @@ def main():
         while True:
             now = datetime.now()
 
-            # Create display image
-            image, draw = create_canvas()
+            # Redraw canvas
+            canvas.clear()
 
-            # Draw border
-            draw.rectangle((0, 0, 121, 249), outline=0)
-            draw.rectangle((2, 2, 119, 247), outline=0)
+            # Border
+            canvas.rectangle(0, 0, 121, 249)
+            canvas.rectangle(2, 2, 119, 247)
 
             # Title
-            draw.text((25, 10), "Pi Zero Clock", font=font_label, fill=0)
+            canvas.text(20, 10, "Pi Zero Clock", font=font_label)
 
-            # Current time
+            # Time
             time_str = now.strftime("%H:%M:%S")
-            draw.text((10, 50), time_str, font=font_time, fill=0)
+            canvas.text(8, 45, time_str, font=font_time)
 
             # Date
-            date_str = now.strftime("%A")
-            draw.text((10, 100), date_str, font=font_date, fill=0)
-            date_str2 = now.strftime("%B %d, %Y")
-            draw.text((10, 120), date_str2, font=font_date, fill=0)
+            canvas.text(10, 90, now.strftime("%A"), font=font_date)
+            canvas.text(10, 110, now.strftime("%B %d, %Y"), font=font_date)
 
-            # Convert to display format
-            img_bytes = pil_to_epd(image)
+            # Separator
+            canvas.line(10, 135, 110, 135)
 
-            # Full refresh once per minute to clear ghosting
+            # Additional info
+            canvas.text(10, 145, f"Week {now.strftime('%W')}", font=font_label)
+            canvas.text(10, 160, f"Day {now.strftime('%j')} of year", font=font_label)
+
+            # Full refresh once per minute
             if now.minute != last_minute:
                 last_minute = now.minute
-                epd.hw_init_gui()
-                epd.display(img_bytes)
+                canvas.display()
                 print(f"Full refresh at {time_str}")
             else:
-                # Fast refresh for seconds updates
-                epd.hw_init_fast()
-                epd.whitescreen_all_fast(img_bytes)
+                canvas.display_fast()
 
             time.sleep(1)
 
     except KeyboardInterrupt:
         print("\nStopping clock...")
-        epd.hw_init()
-        epd.whitescreen_white()
-        epd.sleep()
+        canvas.clear()
+        canvas.display()
+        canvas.sleep()
     finally:
-        epd.clean_gpio()
+        canvas.cleanup()
 
 if __name__ == "__main__":
     main()

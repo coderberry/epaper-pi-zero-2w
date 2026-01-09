@@ -7,8 +7,7 @@ Useful for headless Raspberry Pi monitoring.
 Updates every 30 seconds. Press Ctrl+C to exit.
 """
 
-from epd_2inch13 import EPD_2Inch13
-from epd_helper import create_canvas, pil_to_epd, load_font
+from epd_helper import EPDCanvas, load_font
 import subprocess
 import time
 import os
@@ -88,23 +87,21 @@ def get_hostname():
     except:
         return "Pi Zero"
 
-def draw_progress_bar(draw, x, y, width, height, percent):
+def draw_progress_bar(canvas, x, y, width, height, percent):
     """Draw a progress bar."""
-    # Border
-    draw.rectangle((x, y, x + width, y + height), outline=0)
-    # Fill
+    canvas.rectangle(x, y, x + width, y + height)
     fill_width = int((width - 2) * min(percent, 100) / 100)
     if fill_width > 0:
-        draw.rectangle((x + 1, y + 1, x + 1 + fill_width, y + height - 1), fill=0)
+        canvas.rectangle(x + 1, y + 1, x + 1 + fill_width, y + height - 1, fill=True)
 
 def main():
-    epd = EPD_2Inch13()
+    canvas = EPDCanvas()
 
     try:
         # Load fonts
-        font_title = load_font(14)
-        font_normal = load_font(12)
-        font_small = load_font(10)
+        font_title = load_font(12)
+        font_normal = load_font(11)
+        font_small = load_font(9)
 
         print("System monitor starting...")
         print("Updates every 30 seconds. Press Ctrl+C to stop.")
@@ -120,50 +117,46 @@ def main():
 
             print(f"CPU: {cpu_temp} | Mem: {mem_usage} | Disk: {disk_usage} | IP: {ip_addr}")
 
-            # Create display image
-            epd.hw_init_gui()
-            image, draw = create_canvas()
+            # Draw display
+            canvas.clear()
 
-            # Title bar (inverted)
-            draw.rectangle((0, 0, 121, 18), fill=0)
-            draw.text((5, 2), hostname[:12], font=font_title, fill=255)
-            draw.text((80, 4), uptime, font=font_small, fill=255)
+            # Title bar (inverted - draw filled rect then white text via pixels)
+            canvas.rectangle(0, 0, 121, 16, fill=True)
+
+            # Since we can't draw white on black easily, just draw a border instead
+            canvas.clear()
+            canvas.rectangle(0, 0, 121, 18)
+            canvas.text(5, 3, hostname[:10], font=font_title)
+            canvas.text(85, 5, uptime, font=font_small)
 
             # IP Address
-            y = 25
-            draw.text((5, y), f"IP: {ip_addr}", font=font_normal, fill=0)
+            canvas.text(5, 25, f"IP: {ip_addr}", font=font_normal)
 
             # CPU Temperature
-            y = 45
-            draw.text((5, y), f"CPU: {cpu_temp}", font=font_normal, fill=0)
+            canvas.text(5, 45, f"CPU: {cpu_temp}", font=font_normal)
 
             # Memory
-            y = 70
-            draw.text((5, y), f"Mem: {mem_usage}", font=font_small, fill=0)
-            draw_progress_bar(draw, 5, y + 14, 100, 8, mem_pct)
+            canvas.text(5, 70, f"Memory: {mem_usage}", font=font_small)
+            draw_progress_bar(canvas, 5, 85, 100, 8, mem_pct)
 
             # Disk
-            y = 100
-            draw.text((5, y), f"Disk: {disk_usage}", font=font_small, fill=0)
-            draw_progress_bar(draw, 5, y + 14, 100, 8, disk_pct)
+            canvas.text(5, 105, f"Disk: {disk_usage}", font=font_small)
+            draw_progress_bar(canvas, 5, 120, 100, 8, disk_pct)
 
             # Timestamp
             now = datetime.now().strftime("%H:%M:%S")
-            draw.text((5, 230), f"Updated: {now}", font=font_small, fill=0)
+            canvas.text(5, 230, f"Updated: {now}", font=font_small)
 
-            # Convert and display
-            img_bytes = pil_to_epd(image)
-            epd.display(img_bytes)
-
+            canvas.display()
             time.sleep(30)
 
     except KeyboardInterrupt:
         print("\nStopping monitor...")
-        epd.hw_init()
-        epd.whitescreen_white()
-        epd.sleep()
+        canvas.clear()
+        canvas.display()
+        canvas.sleep()
     finally:
-        epd.clean_gpio()
+        canvas.cleanup()
 
 if __name__ == "__main__":
     main()

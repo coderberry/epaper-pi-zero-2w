@@ -1,69 +1,52 @@
 #!/usr/bin/env python3
 """
 Example 02: Drawing Shapes
-Demonstrates drawing lines, rectangles, circles, and polygons.
+Demonstrates drawing lines, rectangles, and circles.
 """
 
-from epd_2inch13 import EPD_2Inch13
-from epd_helper import create_canvas, pil_to_epd, load_font
+from epd_helper import EPDCanvas, load_font
 import time
 
 def main():
-    epd = EPD_2Inch13()
+    canvas = EPDCanvas()
 
     try:
-        print("Initializing display...")
-        epd.hw_init_gui()
-
-        # Create canvas
-        image, draw = create_canvas()
-
-        # Draw various shapes
+        print("Drawing shapes...")
+        canvas.clear()
 
         # Lines
-        draw.line((10, 10, 80, 10), fill=0, width=1)
-        draw.line((10, 15, 80, 15), fill=0, width=2)
-        draw.line((10, 22, 80, 40), fill=0, width=1)  # Diagonal
+        canvas.line(10, 10, 80, 10)       # Horizontal
+        canvas.line(10, 20, 80, 40)       # Diagonal
+        canvas.line(90, 10, 90, 50)       # Vertical
 
         # Rectangles
-        draw.rectangle((10, 50, 50, 80), outline=0)   # Outline only
-        draw.rectangle((60, 50, 100, 80), fill=0)     # Filled
+        canvas.rectangle(10, 50, 50, 80)              # Outline
+        canvas.rectangle(60, 50, 100, 80, fill=True)  # Filled
 
-        # Circles/Ellipses
-        draw.ellipse((10, 90, 40, 120), outline=0)    # Circle outline
-        draw.ellipse((50, 90, 80, 120), fill=0)       # Circle filled
+        # Circles
+        canvas.circle(30, 110, 15)              # Outline
+        canvas.circle(80, 110, 15, fill=True)   # Filled
 
-        # Polygon (triangle)
-        draw.polygon([(10, 140), (50, 140), (30, 170)], outline=0)
+        # More shapes lower on screen
+        canvas.rectangle(10, 140, 110, 145, fill=True)  # Thick line
+        canvas.circle(60, 180, 30)                       # Large circle
 
-        # Filled polygon
-        draw.polygon([(60, 140), (100, 140), (80, 170)], fill=0)
-
-        # Arc
-        draw.arc((10, 180, 50, 220), start=0, end=180, fill=0)
-
-        # Chord
-        draw.chord((60, 180, 100, 220), start=0, end=180, fill=0)
-
-        # Add label
+        # Label
         font = load_font(12)
-        draw.text((10, 230), "Shapes Demo", font=font, fill=0)
+        canvas.text(10, 220, "Shapes Demo", font=font)
 
-        # Convert and display
-        img_bytes = pil_to_epd(image)
-
-        print("Displaying shapes...")
-        epd.display(img_bytes)
+        print("Sending to display...")
+        canvas.display()
 
         print("Done!")
         time.sleep(2)
-        epd.sleep()
+        canvas.sleep()
 
     except KeyboardInterrupt:
         print("Interrupted")
-        epd.sleep()
+        canvas.sleep()
     finally:
-        epd.clean_gpio()
+        canvas.cleanup()
 
 if __name__ == "__main__":
     main()
