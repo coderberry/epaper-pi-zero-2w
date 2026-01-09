@@ -1,0 +1,23 @@
+[Unit]
+Description=e-Paper Display HTTP Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/Code/epaper-pi-zero-2w/examples
+ExecStart=/usr/bin/python3 /home/pi/Code/epaper-pi-zero-2w/examples/display_server.py --port 8080 --bind 0.0.0.0
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Give service time to initialize display
+TimeoutStartSec=30
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target

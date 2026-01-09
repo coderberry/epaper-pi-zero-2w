@@ -84,3 +84,140 @@ canvas.sleep()  # Required!
 - Black pixels are drawn by default
 - Use `canvas.clear()` to fill with white
 - This is a monochrome display - no grayscale
+
+## HTTP Server (display_server.py)
+
+The HTTP server allows you to update the display remotely via HTTP POST requests. The display runs in **landscape mode** (250 wide x 122 tall) with text automatically centered and wrapped.
+
+### Starting the Server
+
+**Manual mode:**
+```bash
+cd examples
+python3 display_server.py
+
+# Or with custom port/bind address:
+python3 display_server.py --port 8080 --bind 0.0.0.0
+```
+
+**As systemd service (auto-start on boot):**
+```bash
+cd systemd
+sudo ./install.sh
+
+# View logs:
+journalctl -u display-server -f
+
+# Stop service:
+sudo systemctl stop display-server
+
+# Uninstall:
+sudo ./uninstall.sh
+```
+
+### API Endpoints
+
+#### POST /display
+Update the display with centered, wrapped text.
+
+**Request:**
+```bash
+curl -X POST http://localhost:8080/display \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello from HTTP!"}'
+```
+
+**Request body (JSON):**
+```json
+{
+  "text": "Your message here",
+  "font_size": 24,
+  "clear_first": true,
+  "fast_refresh": false
+}
+```
+
+**Parameters:**
+- `text` (string, required): Text to display
+- `font_size` (int, optional, default 24): Font size (8-48)
+- `clear_first` (bool, optional, default true): Clear before rendering
+- `fast_refresh` (bool, optional, default false): Use fast refresh (~1.5s vs ~2s)
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Display updated",
+  "lines": 3,
+  "truncated": false,
+  "fast_refresh": false
+}
+```
+
+#### GET /status
+Health check endpoint.
+
+```bash
+curl http://localhost:8080/status
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "uptime": 3600,
+  "last_update": "2024-01-15T10:30:00"
+}
+```
+
+#### GET /clear
+Clear the display.
+
+```bash
+curl http://localhost:8080/clear
+```
+
+### Examples
+
+**Simple text:**
+```bash
+curl -X POST http://localhost:8080/display \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello World!"}'
+```
+
+**Long text (auto-wraps):**
+```bash
+curl -X POST http://localhost:8080/display \
+  -H "Content-Type: application/json" \
+  -d '{"text": "This is a longer message that will automatically wrap across multiple lines and be centered on the display."}'
+```
+
+**Custom font size:**
+```bash
+curl -X POST http://localhost:8080/display \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Large Text", "font_size": 32}'
+```
+
+**Fast refresh:**
+```bash
+curl -X POST http://localhost:8080/display \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Quick update", "fast_refresh": true}'
+```
+
+### Landscape Mode
+
+The HTTP server uses **landscape orientation** (250x122 pixels):
+- Text is automatically centered both horizontally and vertically
+- Word wrapping happens automatically
+- Long text is truncated with "..." after 8 lines
+
+### Files
+
+- `display_server.py` - HTTP server implementation
+- `landscape_helper.py` - Landscape mode canvas with text centering
+- `systemd/display-server.service` - Systemd service file
+- `systemd/install.sh` - Install as service
+- `systemd/uninstall.sh` - Uninstall service
