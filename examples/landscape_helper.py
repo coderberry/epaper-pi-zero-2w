@@ -29,7 +29,7 @@ class LandscapeEPDCanvas(EPDCanvas):
         self.gui.h = 122
 
     def render_text(self, text, font_size=24, align_h='center', align_v='middle',
-                    margin=10, line_spacing=1.2, max_lines=8):
+                    margin=10, line_spacing=1.2, max_lines=8, font_name=None):
         """
         Render text with flexible horizontal and vertical alignment.
 
@@ -41,6 +41,7 @@ class LandscapeEPDCanvas(EPDCanvas):
             margin: Margin in pixels (default: 10)
             line_spacing: Line spacing multiplier (default: 1.2)
             max_lines: Maximum number of lines before truncating (default: 8)
+            font_name: Font name from FONT_REGISTRY (default: None, uses default font)
 
         Returns:
             dict: Metadata about the rendering:
@@ -59,7 +60,7 @@ class LandscapeEPDCanvas(EPDCanvas):
             return {"lines": 0, "truncated": False, "text_height": 0}
 
         # Load font
-        font = load_font(font_size)
+        font = load_font(font_size, font_name)
 
         # Calculate available width for text
         available_width = self.width - (2 * margin)
@@ -143,7 +144,8 @@ class LandscapeEPDCanvas(EPDCanvas):
             "text_height": total_text_height
         }
 
-    def render_centered_text(self, text, font_size=24, margin=10, line_spacing=1.2, max_lines=8):
+    def render_centered_text(self, text, font_size=24, margin=10, line_spacing=1.2,
+                             max_lines=8, font_name=None):
         """
         Render text centered both horizontally and vertically with word wrapping.
 
@@ -155,6 +157,7 @@ class LandscapeEPDCanvas(EPDCanvas):
             margin: Margin in pixels on left/right (default: 10)
             line_spacing: Line spacing multiplier (default: 1.2)
             max_lines: Maximum number of lines before truncating (default: 8)
+            font_name: Font name from FONT_REGISTRY (default: None, uses default font)
 
         Returns:
             dict: Metadata about the rendering:
@@ -163,7 +166,7 @@ class LandscapeEPDCanvas(EPDCanvas):
                 - text_height: Total height of text block
         """
         return self.render_text(text, font_size, 'center', 'middle',
-                               margin, line_spacing, max_lines)
+                               margin, line_spacing, max_lines, font_name)
 
     def _wrap_text(self, text, font, max_width):
         """

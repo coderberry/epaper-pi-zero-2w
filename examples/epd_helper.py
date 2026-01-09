@@ -3,6 +3,7 @@ Helper functions for e-paper display.
 Uses the EPD_GUI class which has the correct memory layout for the display.
 """
 
+import os
 from PIL import Image, ImageDraw, ImageFont
 from epd_2inch13 import EPD_WIDTH, EPD_HEIGHT
 from epd_gui import EPD_GUI, WHITE, BLACK
@@ -10,6 +11,44 @@ from epd_gui import EPD_GUI, WHITE, BLACK
 # Display dimensions
 DISPLAY_WIDTH = EPD_WIDTH    # 122 pixels
 DISPLAY_HEIGHT = EPD_HEIGHT  # 250 pixels
+
+# Script directory for bundled fonts
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Font registry: friendly name -> list of possible paths (first found is used)
+FONT_REGISTRY = {
+    "misans": [
+        os.path.join(_SCRIPT_DIR, "MiSans-Light.ttf"),
+        "MiSans-Light.ttf",
+    ],
+    "sans": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    ],
+    "sans-bold": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    ],
+    "mono": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
+    ],
+    "mono-bold": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSansMono-Bold.ttf",
+    ],
+    "serif": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+        "/usr/share/fonts/TTF/DejaVuSerif.ttf",
+    ],
+    "serif-bold": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSerif-Bold.ttf",
+    ],
+}
+
+# Default font to use
+DEFAULT_FONT = "misans"
 
 
 class EPDCanvas:
@@ -98,31 +137,52 @@ class EPDCanvas:
         self.gui.epd.clean_gpio()
 
 
-def load_font(size=16):
+def get_available_fonts():
     """
-    Load a TrueType font, falling back to default if not available.
+    Get list of available font names.
+
+    Returns:
+        list: List of font names that are available on this system
+    """
+    available = []
+    for name, paths in FONT_REGISTRY.items():
+        for path in paths:
+            if os.path.exists(path):
+                available.append(name)
+                break
+    return available
+
+
+def load_font(size=16, font_name=None):
+    """
+    Load a TrueType font by name, falling back to default if not available.
 
     Args:
         size: Font size in points
+        font_name: Font name from FONT_REGISTRY (e.g., 'sans', 'mono', 'serif')
+                   If None, uses DEFAULT_FONT
 
     Returns:
         PIL.ImageFont: Font object
     """
-    import os
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if font_name is None:
+        font_name = DEFAULT_FONT
 
-    # Try fonts in order of preference
-    font_paths = [
-        os.path.join(script_dir, "MiSans-Light.ttf"),
-        "MiSans-Light.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-    ]
+    # Try the requested font first
+    if font_name in FONT_REGISTRY:
+        for path in FONT_REGISTRY[font_name]:
+            try:
+                return ImageFont.truetype(path, size)
+            except (IOError, OSError):
+                continue
 
-    for font_path in font_paths:
-        try:
-            return ImageFont.truetype(font_path, size)
-        except (IOError, OSError):
-            continue
+    # Fall back to default font
+    if font_name != DEFAULT_FONT and DEFAULT_FONT in FONT_REGISTRY:
+        for path in FONT_REGISTRY[DEFAULT_FONT]:
+            try:
+                return ImageFont.truetype(path, size)
+            except (IOError, OSError):
+                continue
 
+    # Last resort: PIL default
     return ImageFont.load_default()

@@ -109,6 +109,22 @@
             font-size: 16px;
         }
 
+        select {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
         .radio-group {
             display: flex;
             gap: 16px;
@@ -277,6 +293,18 @@
                 </div>
             </div>
 
+            <!-- Font Selection -->
+            <div class="form-group">
+                <label for="font_name">Font:</label>
+                <select name="font_name" id="font_name">
+                    {% for font in available_fonts or ['misans'] %}
+                    <option value="{{ font }}" {% if (font_name or default_font) == font %}selected{% endif %}>
+                        {{ font }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
             <!-- Horizontal Alignment -->
             <div class="form-group">
                 <label>Horizontal Alignment:</label>
@@ -340,7 +368,8 @@
             <strong>{{ '✓' if status_type == 'success' else '✗' }}</strong> {{ status }}
             {% if metadata %}
             <div class="display-preview">
-                📊 Lines rendered: <strong>{{ metadata.lines }}</strong> |
+                📊 Lines: <strong>{{ metadata.lines }}</strong> |
+                Font: <strong>{{ metadata.font }}</strong> |
                 Truncated: <strong>{{ 'Yes' if metadata.truncated else 'No' }}</strong> |
                 Fast refresh: <strong>{{ 'Yes' if metadata.fast_refresh else 'No' }}</strong>
             </div>

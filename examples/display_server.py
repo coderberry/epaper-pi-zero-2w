@@ -11,14 +11,20 @@ Web UI:
 
 API Endpoints:
     POST /api/display - Update display with text
-        Body: {"text": "Hello", "font_size": 24, "align_h": "center", "align_v": "middle",
+        Body: {"text": "Hello", "font_size": 24, "font_name": "misans",
+               "align_h": "center", "align_v": "middle",
                "clear_first": true, "fast_refresh": false}
 
     GET /status - Server health check
         Returns: {"status": "ok", "uptime": seconds, "last_update": timestamp}
 
+    GET /fonts - List available fonts
+        Returns: {"fonts": ["misans", "sans", ...], "default": "misans"}
+
     GET /clear - Clear display
         Returns: {"status": "success", "message": "Display cleared"}
+
+Available fonts: misans, sans, sans-bold, mono, mono-bold, serif, serif-bold
 """
 
 from flask import Flask, request, jsonify, render_template, redirect, url_for
@@ -31,6 +37,7 @@ from datetime import datetime
 import logging
 
 from landscape_helper import LandscapeEPDCanvas
+from epd_helper import get_available_fonts, FONT_REGISTRY, DEFAULT_FONT
 
 # Configure logging
 logging.basicConfig(
@@ -66,7 +73,8 @@ start_time = None
 last_update = None
 
 
-def update_display(text, font_size, align_h, align_v, clear_first, fast_refresh):
+def update_display(text, font_size, align_h, align_v, clear_first, fast_refresh,
+                   font_name=None):
     """
     Shared logic for updating display from both web form and API.
     Thread-safe with canvas_lock.
@@ -78,6 +86,7 @@ def update_display(text, font_size, align_h, align_v, clear_first, fast_refresh)
         align_v: Vertical alignment ('top', 'middle', 'bottom')
         clear_first: Clear display before rendering
         fast_refresh: Use fast refresh mode
+        font_name: Font name from FONT_REGISTRY (default: None, uses default)
 
     Returns:
         dict: Metadata about rendering (lines, truncated, etc.)
@@ -89,12 +98,13 @@ def update_display(text, font_size, align_h, align_v, clear_first, fast_refresh)
         if clear_first:
             canvas.clear()
 
-        # Render text with alignment
+        # Render text with alignment and font
         result = canvas.render_text(
             text=text,
             font_size=font_size,
             align_h=align_h,
-            align_v=align_v
+            align_v=align_v,
+            font_name=font_name
         )
 
         # Update display
@@ -108,6 +118,7 @@ def update_display(text, font_size, align_h, align_v, clear_first, fast_refresh)
 
         # Log update
         logger.info(f"Display updated: {result['lines']} lines, "
+                   f"font={font_name or DEFAULT_FONT}, "
                    f"align={align_h}/{align_v}, "
                    f"truncated={result['truncated']}, "
                    f"fast_refresh={fast_refresh}")
@@ -115,14 +126,17 @@ def update_display(text, font_size, align_h, align_v, clear_first, fast_refresh)
         return {
             "lines": result["lines"],
             "truncated": result["truncated"],
-            "fast_refresh": fast_refresh
+            "fast_refresh": fast_refresh,
+            "font": font_name or DEFAULT_FONT
         }
 
 
 @app.route('/', methods=['GET'])
 def index():
     """Render web UI form."""
-    return render_template('index.html')
+    return render_template('index.html',
+                         available_fonts=list(FONT_REGISTRY.keys()),
+                         default_font=DEFAULT_FONT)
 
 
 @app.route('/display', methods=['POST'])
@@ -132,10 +146,15 @@ def handle_form_submission():
         # Extract form data
         text = request.form.get('text', '').strip()
         font_size = int(request.form.get('font_size', 24))
+        font_name = request.form.get('font_name', DEFAULT_FONT)
         align_h = request.form.get('align_h', 'center')
         align_v = request.form.get('align_v', 'middle')
         clear_first = request.form.get('clear_first') == 'true'
         fast_refresh = request.form.get('fast_refresh') == 'true'
+
+        # Validate font_name
+        if font_name not in FONT_REGISTRY:
+            font_name = DEFAULT_FONT
 
         # Validate text
         if not text:
@@ -144,10 +163,13 @@ def handle_form_submission():
                                  status_type='error',
                                  text=text,
                                  font_size=font_size,
+                                 font_name=font_name,
                                  align_h=align_h,
                                  align_v=align_v,
                                  clear_first=clear_first,
-                                 fast_refresh=fast_refresh)
+                                 fast_refresh=fast_refresh,
+                                 available_fonts=list(FONT_REGISTRY.keys()),
+                                 default_font=DEFAULT_FONT)
 
         # Validate font size
         if font_size < 8 or font_size > 48:
@@ -156,14 +178,17 @@ def handle_form_submission():
                                  status_type='error',
                                  text=text,
                                  font_size=font_size,
+                                 font_name=font_name,
                                  align_h=align_h,
                                  align_v=align_v,
                                  clear_first=clear_first,
-                                 fast_refresh=fast_refresh)
+                                 fast_refresh=fast_refresh,
+                                 available_fonts=list(FONT_REGISTRY.keys()),
+                                 default_font=DEFAULT_FONT)
 
         # Update display
         result = update_display(text, font_size, align_h, align_v,
-                               clear_first, fast_refresh)
+                               clear_first, fast_refresh, font_name)
 
         # Render success
         return render_template('index.html',
@@ -171,25 +196,32 @@ def handle_form_submission():
                              status_type='success',
                              text=text,
                              font_size=font_size,
+                             font_name=font_name,
                              align_h=align_h,
                              align_v=align_v,
                              clear_first=clear_first,
                              fast_refresh=fast_refresh,
-                             metadata=result)
+                             metadata=result,
+                             available_fonts=list(FONT_REGISTRY.keys()),
+                             default_font=DEFAULT_FONT)
 
     except ValueError as e:
         logger.error(f"Form validation error: {e}", exc_info=True)
         return render_template('index.html',
                              status=f'Invalid input: {str(e)}',
                              status_type='error',
-                             text=request.form.get('text', ''))
+                             text=request.form.get('text', ''),
+                             available_fonts=list(FONT_REGISTRY.keys()),
+                             default_font=DEFAULT_FONT)
 
     except Exception as e:
         logger.error(f"Form submission error: {e}", exc_info=True)
         return render_template('index.html',
                              status=f'Error: {str(e)}',
                              status_type='error',
-                             text=request.form.get('text', ''))
+                             text=request.form.get('text', ''),
+                             available_fonts=list(FONT_REGISTRY.keys()),
+                             default_font=DEFAULT_FONT)
 
 
 @app.route('/api/display', methods=['POST'])
@@ -214,10 +246,11 @@ def handle_api_display():
         # Extract parameters (backward compatible defaults)
         text = data['text']
         font_size = data.get('font_size', 24)
+        font_name = data.get('font_name', DEFAULT_FONT)
         clear_first = data.get('clear_first', True)
         fast_refresh = data.get('fast_refresh', False)
 
-        # NEW: Support alignment in API (optional, default to center/middle)
+        # Support alignment in API (optional, default to center/middle)
         align_h = data.get('align_h', 'center')
         align_v = data.get('align_v', 'middle')
 
@@ -232,6 +265,13 @@ def handle_api_display():
             return jsonify({
                 "status": "error",
                 "message": "'font_size' must be an integer between 8 and 48"
+            }), 400
+
+        # Validate font_name
+        if font_name not in FONT_REGISTRY:
+            return jsonify({
+                "status": "error",
+                "message": f"'font_name' must be one of: {', '.join(FONT_REGISTRY.keys())}"
             }), 400
 
         # Validate alignment parameters
@@ -249,7 +289,7 @@ def handle_api_display():
 
         # Update display
         result = update_display(text, font_size, align_h, align_v,
-                               clear_first, fast_refresh)
+                               clear_first, fast_refresh, font_name)
 
         # Return JSON response
         return jsonify({
@@ -257,7 +297,8 @@ def handle_api_display():
             "message": "Display updated",
             "lines": result["lines"],
             "truncated": result["truncated"],
-            "fast_refresh": fast_refresh
+            "fast_refresh": fast_refresh,
+            "font": result["font"]
         }), 200
 
     except Exception as e:
@@ -279,6 +320,15 @@ def handle_status():
         "status": "ok",
         "uptime": uptime,
         "last_update": last_update
+    })
+
+
+@app.route('/fonts', methods=['GET'])
+def handle_fonts():
+    """Return available fonts."""
+    return jsonify({
+        "fonts": list(FONT_REGISTRY.keys()),
+        "default": DEFAULT_FONT
     })
 
 
