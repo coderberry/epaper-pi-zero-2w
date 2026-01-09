@@ -39,28 +39,29 @@ python3 01_hello_world.py
 - **Fast refresh** (`hw_init_fast()` + `whitescreen_all_fast()`): ~1.5 seconds, less flicker
 - **Partial refresh**: Updates only part of the screen, no flicker, but can cause ghosting over time
 
-### Image Conversion
+### Using the Helper Module
+
+The `epd_helper.py` module simplifies image creation and conversion:
+
 ```python
-# Create image with PIL
-image = Image.new('1', (250, 122), 255)  # 1-bit, white background
-draw = ImageDraw.Draw(image)
-draw.text((10, 10), "Hello", fill=0)     # fill=0 is black
+from epd_2inch13 import EPD_2Inch13
+from epd_helper import create_canvas, pil_to_epd, load_font
 
-# Rotate for display orientation
-image = image.rotate(90, expand=True)
+epd = EPD_2Inch13()
+epd.hw_init_gui()
 
-# Convert to bytes
-pixels = list(image.getdata())
-img_bytes = []
-for i in range(0, len(pixels), 8):
-    byte = 0
-    for j in range(8):
-        if i + j < len(pixels) and pixels[i + j] == 0:
-            byte |= (0x80 >> j)
-    img_bytes.append(byte ^ 0xFF)
+# Create a canvas (122x250 pixels, white background)
+image, draw = create_canvas()
 
-# Display
+# Draw on it
+font = load_font(16)
+draw.text((10, 10), "Hello", font=font, fill=0)  # fill=0 is black
+draw.rectangle((10, 40, 100, 80), outline=0)
+
+# Convert and display
+img_bytes = pil_to_epd(image)
 epd.display(img_bytes)
+epd.sleep()
 ```
 
 ### Always Sleep After Display

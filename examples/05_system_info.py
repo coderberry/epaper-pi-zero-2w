@@ -7,11 +7,12 @@ Useful for headless Raspberry Pi monitoring.
 Updates every 30 seconds. Press Ctrl+C to exit.
 """
 
-from PIL import Image, ImageDraw, ImageFont
-from epd_2inch13 import EPD_2Inch13, EPD_WIDTH, EPD_HEIGHT
+from epd_2inch13 import EPD_2Inch13
+from epd_helper import create_canvas, pil_to_epd, load_font
 import subprocess
 import time
 import os
+from datetime import datetime
 
 def get_cpu_temp():
     """Get CPU temperature."""
@@ -30,9 +31,9 @@ def get_memory_usage():
         total = int(lines[0].split()[1])
         available = int(lines[2].split()[1])
         used_percent = ((total - available) / total) * 100
-        return f"{used_percent:.0f}%"
+        return f"{used_percent:.0f}%", used_percent
     except:
-        return "N/A"
+        return "N/A", 0
 
 def get_disk_usage():
     """Get root partition disk usage."""
@@ -41,9 +42,9 @@ def get_disk_usage():
         total = stat.f_blocks * stat.f_frsize
         free = stat.f_bavail * stat.f_frsize
         used_percent = ((total - free) / total) * 100
-        return f"{used_percent:.0f}%"
+        return f"{used_percent:.0f}%", used_percent
     except:
-        return "N/A"
+        return "N/A", 0
 
 def get_ip_address():
     """Get primary IP address."""
@@ -87,22 +88,8 @@ def get_hostname():
     except:
         return "Pi Zero"
 
-def image_to_bytes(image):
-    """Convert PIL Image to e-paper byte format."""
-    pixels = list(image.getdata())
-    img_bytes = []
-    for i in range(0, len(pixels), 8):
-        byte = 0
-        for j in range(8):
-            if i + j < len(pixels) and pixels[i + j] == 0:
-                byte |= (0x80 >> j)
-        img_bytes.append(byte ^ 0xFF)
-    return img_bytes
-
-def draw_progress_bar(draw, x, y, width, height, percent, label):
-    """Draw a labeled progress bar."""
-    # Label
-    draw.text((x, y - 12), label, fill=0)
+def draw_progress_bar(draw, x, y, width, height, percent):
+    """Draw a progress bar."""
     # Border
     draw.rectangle((x, y, x + width, y + height), outline=0)
     # Fill
@@ -115,14 +102,9 @@ def main():
 
     try:
         # Load fonts
-        try:
-            font_title = ImageFont.truetype("MiSans-Light.ttf", 16)
-            font_normal = ImageFont.truetype("MiSans-Light.ttf", 12)
-            font_small = ImageFont.truetype("MiSans-Light.ttf", 10)
-        except:
-            font_title = ImageFont.load_default()
-            font_normal = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+        font_title = load_font(14)
+        font_normal = load_font(12)
+        font_small = load_font(10)
 
         print("System monitor starting...")
         print("Updates every 30 seconds. Press Ctrl+C to stop.")
@@ -131,56 +113,46 @@ def main():
             # Gather system info
             hostname = get_hostname()
             cpu_temp = get_cpu_temp()
-            mem_usage = get_memory_usage()
-            disk_usage = get_disk_usage()
+            mem_usage, mem_pct = get_memory_usage()
+            disk_usage, disk_pct = get_disk_usage()
             ip_addr = get_ip_address()
             uptime = get_uptime()
-
-            # Parse percentages for bars
-            try:
-                mem_pct = float(mem_usage.replace('%', ''))
-            except:
-                mem_pct = 0
-            try:
-                disk_pct = float(disk_usage.replace('%', ''))
-            except:
-                disk_pct = 0
 
             print(f"CPU: {cpu_temp} | Mem: {mem_usage} | Disk: {disk_usage} | IP: {ip_addr}")
 
             # Create display image
             epd.hw_init_gui()
-            image = Image.new('1', (EPD_HEIGHT, EPD_WIDTH), 255)
-            draw = ImageDraw.Draw(image)
+            image, draw = create_canvas()
 
-            # Title bar
-            draw.rectangle((0, 0, EPD_HEIGHT, 18), fill=0)
-            draw.text((5, 2), hostname, font=font_title, fill=255)
-            draw.text((180, 4), uptime, font=font_small, fill=255)
+            # Title bar (inverted)
+            draw.rectangle((0, 0, 121, 18), fill=0)
+            draw.text((5, 2), hostname[:12], font=font_title, fill=255)
+            draw.text((80, 4), uptime, font=font_small, fill=255)
 
-            # System info
+            # IP Address
             y = 25
             draw.text((5, y), f"IP: {ip_addr}", font=font_normal, fill=0)
 
-            y = 42
-            draw.text((5, y), f"CPU Temp: {cpu_temp}", font=font_normal, fill=0)
+            # CPU Temperature
+            y = 45
+            draw.text((5, y), f"CPU: {cpu_temp}", font=font_normal, fill=0)
 
-            # Memory bar
-            y = 62
-            draw_progress_bar(draw, 5, y, 120, 10, mem_pct, f"Memory: {mem_usage}")
+            # Memory
+            y = 70
+            draw.text((5, y), f"Mem: {mem_usage}", font=font_small, fill=0)
+            draw_progress_bar(draw, 5, y + 14, 100, 8, mem_pct)
 
-            # Disk bar
-            y = 90
-            draw_progress_bar(draw, 5, y, 120, 10, disk_pct, f"Disk: {disk_usage}")
+            # Disk
+            y = 100
+            draw.text((5, y), f"Disk: {disk_usage}", font=font_small, fill=0)
+            draw_progress_bar(draw, 5, y + 14, 100, 8, disk_pct)
 
             # Timestamp
-            from datetime import datetime
             now = datetime.now().strftime("%H:%M:%S")
-            draw.text((5, 108), f"Updated: {now}", font=font_small, fill=0)
+            draw.text((5, 230), f"Updated: {now}", font=font_small, fill=0)
 
             # Convert and display
-            image = image.rotate(90, expand=True)
-            img_bytes = image_to_bytes(image)
+            img_bytes = pil_to_epd(image)
             epd.display(img_bytes)
 
             time.sleep(30)
