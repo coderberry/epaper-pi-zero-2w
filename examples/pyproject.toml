@@ -7,6 +7,7 @@ requires-python = ">=3.9"
 dependencies = [
     "flask>=3.0",
     "gpiozero>=2.0",
+    "lgpio>=0.2",
     "numpy>=1.26",
     "pillow>=10.0",
     "spidev>=3.6",
